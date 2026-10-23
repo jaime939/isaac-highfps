@@ -1,0 +1,56 @@
+name: Build Isaac High FPS for REPENTOGON
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Fetch official REPENTOGON-compatible beta source
+        uses: actions/checkout@v4
+        with:
+          repository: hunchcldev/isaac-highfps
+          ref: repentogon-support
+          persist-credentials: false
+
+      - name: Set up Python for DLL proxy generator
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Compile Windows x86 DLL with Visual Studio
+        shell: cmd
+        run: call build.bat
+
+      - name: Verify DLL and add safe default configuration
+        shell: pwsh
+        run: |
+          if (!(Test-Path -LiteralPath 'build/winmm.dll')) { throw 'winmm.dll was not built.' }
+          @(
+            '[highfps]'
+            'Enabled=1'
+            'Interpolate=1'
+            'MaxFps=0'
+            'LuaVanillaCadence=1'
+            'LuaOverlay=0'
+            'Log=1'
+            'Diag=0'
+          ) | Set-Content -LiteralPath 'build/isaac-highfps.ini' -Encoding ascii
+          Get-Item build/winmm.dll | Select-Object Name, Length
+          (Get-FileHash -Algorithm SHA256 build/winmm.dll).Hash |
+            Set-Content -LiteralPath 'build/winmm.sha256' -Encoding ascii
+
+      - name: Downloadable Steam Deck files
+        uses: actions/upload-artifact@v4
+        with:
+          name: Isaac-HighFPS-REPENTOGON
+          path: |
+            build/winmm.dll
+            build/isaac-highfps.ini
+            build/winmm.sha256
+          if-no-files-found: error
+          retention-days: 7
